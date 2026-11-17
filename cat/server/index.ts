@@ -24,6 +24,7 @@ import {
   getHtml,
   listParticipants,
   loadWorkshopStore,
+  deleteParticipant,
   registerParticipant,
   renameParticipant,
   saveGithub,
@@ -1064,19 +1065,22 @@ async function main(): Promise<void> {
 
     socket.on("removeGuest", async (payload: unknown) => {
       try {
+        requireInstructor(socket);
         requireOpenSession(socket);
         if (typeof payload !== "object" || payload === null) {
-          throw new Error("Invalid temporary card payload.");
+          throw new Error("Invalid name card payload.");
         }
         const { personId } = payload as { personId?: unknown };
         if (typeof personId !== "string" || !findGuest(personId)) {
-          throw new Error("Unknown temporary card.");
+          throw new Error("Unknown workshop name card.");
         }
+        await deleteParticipant(personId);
         state = removeGuest(state, personId);
-        await persistState(state, false);
+        refreshWorkshopBadges();
+        await persistState(state, true);
         emitState();
       } catch (error) {
-        const message = error instanceof Error ? error.message : "Could not remove that temporary card.";
+        const message = error instanceof Error ? error.message : "Could not delete that name card.";
         socket.emit("error-message", message);
       }
     });

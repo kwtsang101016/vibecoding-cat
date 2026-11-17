@@ -16,7 +16,7 @@ interface NameCardTrayProps {
   onSelect: (personId: string) => void;
   onEdit: (personId: string) => void;
   onAddGuest: (name: string, pin: string) => void;
-  onRemoveGuest: (personId: string) => void;
+  onRemoveGuest?: (personId: string) => void;
 }
 
 export function NameCardTray({

@@ -306,6 +306,31 @@ export function surveySummary(): {
   return { total: rows.length, knowIdeWorkMode, aiFrequency, aiIdeFrequency };
 }
 
+export async function deleteParticipant(personId: string): Promise<void> {
+  if (!participants[personId]) {
+    // Still allow clearing orphan tray cards with no workshop record.
+    delete surveys[personId];
+    delete htmlFiles[personId];
+    delete githubLinks[personId];
+    await Promise.all([
+      saveMap(SURVEYS_KEY, surveys),
+      saveMap(HTML_KEY, htmlFiles),
+      saveMap(GITHUB_KEY, githubLinks),
+    ]);
+    return;
+  }
+  delete participants[personId];
+  delete surveys[personId];
+  delete htmlFiles[personId];
+  delete githubLinks[personId];
+  await Promise.all([
+    saveMap(PARTICIPANTS_KEY, participants),
+    saveMap(SURVEYS_KEY, surveys),
+    saveMap(HTML_KEY, htmlFiles),
+    saveMap(GITHUB_KEY, githubLinks),
+  ]);
+}
+
 export async function renameParticipant(
   personId: string,
   newName: string,

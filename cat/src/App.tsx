@@ -377,7 +377,14 @@ export default function App() {
     if (!isGuestId(personId)) {
       return;
     }
-    const confirmed = window.confirm("Remove this temporary name card?");
+    if (!sync.isInstructor) {
+      window.alert("Only the instructor can delete name cards. Enter the instructor PIN first.");
+      return;
+    }
+    const label = peopleById[personId]?.name ?? "this card";
+    const confirmed = window.confirm(
+      `Delete name card “${label}”? This also removes Task 1–3 submissions for that card.`,
+    );
     if (confirmed) {
       sync.removeGuest(personId);
       if (selectedId === personId) {
@@ -576,6 +583,15 @@ export default function App() {
                 Rename card
               </button>
             ) : null}
+            {selectedPerson.role === "guest" && sync.isInstructor ? (
+              <button
+                type="button"
+                className="ghost-button"
+                onClick={() => handleRemoveGuest(selectedPerson.id)}
+              >
+                Delete card
+              </button>
+            ) : null}
             {seatedIds.has(selectedPerson.id) ? (
               <button
                 type="button"
@@ -643,8 +659,9 @@ export default function App() {
         <button type="button" className="ghost-button" onClick={() => void handleSurveySummary()}>
           Survey summary
         </button>
-        <WorkshopSubmitPanel />
       </section>
+
+      <WorkshopSubmitPanel />
 
       <div className="workspace">
         <main className="hall" style={{ ["--seats-per-row" as string]: seatCount }}>
@@ -732,7 +749,7 @@ export default function App() {
           onSelect={selectPerson}
           onEdit={(personId) => ensureAndRun({ type: "edit", personId })}
           onAddGuest={handleAddGuest}
-          onRemoveGuest={handleRemoveGuest}
+          onRemoveGuest={sync.isInstructor ? handleRemoveGuest : undefined}
         />
       </div>
       </>
@@ -846,15 +863,16 @@ function WorkshopSubmitPanel() {
 
   return (
     <form
-      className="guest-form"
-      style={{ minWidth: 240 }}
+      className="workshop-submit"
       onSubmit={(event) => {
         event.preventDefault();
         void submitGithub();
       }}
     >
-      <h3>Submit Task 2 / 3</h3>
-      <p>Use the same name + PIN as your CAT card.</p>
+      <div className="workshop-submit__head">
+        <h3>Submit Task 2 / 3</h3>
+        <p>Same name + PIN as your CAT card.</p>
+      </div>
       <label>
         Name
         <input value={name} onChange={(e) => setName(e.target.value)} required maxLength={40} />
@@ -870,7 +888,7 @@ function WorkshopSubmitPanel() {
         />
       </label>
       <label>
-        Task 2 · HTML file
+        Task 2 · HTML
         <input
           type="file"
           accept=".html,text/html"
@@ -878,7 +896,7 @@ function WorkshopSubmitPanel() {
           onChange={(e) => void submitHtml(e.target.files?.[0] ?? null)}
         />
       </label>
-      <label>
+      <label className="workshop-submit__url">
         Task 3 · GitHub / Pages URL
         <input
           value={githubUrl}
@@ -887,9 +905,9 @@ function WorkshopSubmitPanel() {
         />
       </label>
       <button type="submit" className="ghost-button" disabled={busy}>
-        Submit GitHub link
+        Submit GitHub
       </button>
-      {message ? <p className="howto">{message}</p> : null}
+      {message ? <p className="workshop-submit__msg">{message}</p> : null}
     </form>
   );
 }
