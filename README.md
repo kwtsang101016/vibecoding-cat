@@ -10,7 +10,7 @@ Slides: https://kwtsang101016.github.io/activities/vibecoding2026/
 
 ## Status
 
-Repo + Render wiring first. App code will be adapted from the DDA1000 / STA2002 CAT next.
+`cat/` app is in the repo (baseline CAT adapted from DDA1000). Workshop-specific features (self-create cards, survey Task 1–3, charts) come next.
 
 ## Render setup (do these in order)
 

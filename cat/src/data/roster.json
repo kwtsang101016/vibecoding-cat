@@ -1,0 +1,17 @@
+{
+  "course": "Vibe Coding Workshop 2026",
+  "section": "CUHK",
+  "classroom": "Workshop",
+  "people": [
+    {
+      "id": "aa-tsang",
+      "name": "曾家炜",
+      "englishName": "Ka Wai Tsang",
+      "role": "aa",
+      "college": "",
+      "plan": "Instructor",
+      "photo": "/photos/aa-tsang.png",
+      "leading": true
+    }
+  ]
+}
