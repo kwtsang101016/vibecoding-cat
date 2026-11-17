@@ -41,6 +41,21 @@ export interface ClassroomState {
   guests: Person[];
   /** Who has submitted a study plan (for name-card badges). */
   studyPlanMeta: Record<string, StudyPlanMeta>;
+  /** Workshop task completion badges (Task 1 survey / Task 2 HTML / Task 3 GitHub). */
+  workshopTasks: Record<string, WorkshopTaskMeta>;
+}
+
+export interface WorkshopTaskMeta {
+  surveyAt?: string;
+  htmlAt?: string;
+  githubAt?: string;
+  githubUrl?: string;
+}
+
+export interface WorkshopSurveyAnswers {
+  knowIdeWorkMode: "Y" | "N";
+  aiFrequency: "Often" | "Sometimes" | "Seldom" | "Never";
+  aiIdeFrequency: "Often" | "Sometimes" | "Seldom" | "Never";
 }
 
 export interface Person {

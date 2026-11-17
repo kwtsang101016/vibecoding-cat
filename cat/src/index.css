@@ -658,6 +658,37 @@ h1 {
   background: #c47a12;
 }
 
+.name-card__task-dots {
+  position: absolute;
+  left: 4px;
+  bottom: 3px;
+  display: flex;
+  gap: 2px;
+}
+
+.name-card__task-dots i {
+  font-style: normal;
+  font-size: 9px;
+  font-weight: 800;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  display: inline-grid;
+  place-items: center;
+  background: #e7ddd0;
+  color: #8a7a6a;
+}
+
+.name-card__task-dots i.on {
+  background: #2f7a4a;
+  color: #fff;
+}
+
+.name-card__meta--tasks {
+  color: #2f7a4a;
+  font-weight: 700;
+}
+
 .name-card__meta--plan {
   color: #9a5b00;
   font-weight: 600;

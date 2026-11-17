@@ -1,4 +1,4 @@
-import type { StudyPlanMeta } from "../../shared/types.ts";
+import type { StudyPlanMeta, WorkshopTaskMeta } from "../../shared/types.ts";
 import type { DisplayPerson } from "../lib/people.ts";
 import { NameCard } from "./NameCard.tsx";
 
@@ -11,10 +11,11 @@ interface NameCardTrayProps {
   query: string;
   selectedId: string | null;
   studyPlanMeta: Record<string, StudyPlanMeta>;
+  workshopTasks: Record<string, WorkshopTaskMeta>;
   onQueryChange: (value: string) => void;
   onSelect: (personId: string) => void;
   onEdit: (personId: string) => void;
-  onAddGuest: (name: string, englishName: string) => void;
+  onAddGuest: (name: string, pin: string) => void;
   onRemoveGuest: (personId: string) => void;
 }
 
@@ -27,6 +28,7 @@ export function NameCardTray({
   query,
   selectedId,
   studyPlanMeta,
+  workshopTasks,
   onQueryChange,
   onSelect,
   onEdit,
@@ -73,6 +75,7 @@ export function NameCardTray({
         selectedId={selectedId}
         matchKind="waiting"
         studyPlanMeta={studyPlanMeta}
+        workshopTasks={workshopTasks}
         onSelect={onSelect}
         onEdit={onEdit}
       />
@@ -83,6 +86,7 @@ export function NameCardTray({
         selectedId={selectedId}
         matchKind="waiting"
         studyPlanMeta={studyPlanMeta}
+        workshopTasks={workshopTasks}
         onSelect={onSelect}
         onEdit={onEdit}
       />
@@ -93,16 +97,18 @@ export function NameCardTray({
         selectedId={selectedId}
         matchKind="waiting"
         studyPlanMeta={studyPlanMeta}
+        workshopTasks={workshopTasks}
         onSelect={onSelect}
         onEdit={onEdit}
       />
       <TrayGroup
-        title="Temporary / auditors"
+        title="Workshop cards"
         people={guestsWaiting}
         query={query}
         selectedId={selectedId}
         matchKind="waiting"
         studyPlanMeta={studyPlanMeta}
+        workshopTasks={workshopTasks}
         onSelect={onSelect}
         onEdit={onEdit}
         onRemoveGuest={onRemoveGuest}
@@ -115,6 +121,7 @@ export function NameCardTray({
           selectedId={selectedId}
           matchKind="seated"
           studyPlanMeta={studyPlanMeta}
+          workshopTasks={workshopTasks}
           onSelect={onSelect}
           onEdit={onEdit}
           onRemoveGuest={onRemoveGuest}
@@ -123,14 +130,14 @@ export function NameCardTray({
       <GuestComposer onAddGuest={onAddGuest} />
       {waitingTotal === 0 && !(needle && seatedMatches.length > 0) ? (
         <p className="tray__empty">
-          {needle ? "No matching cards. Add a temporary card below if this is an auditor." : "Everyone is seated."}
+          {needle ? "No matching cards. Create a name card below." : "Everyone is seated."}
         </p>
       ) : null}
     </aside>
   );
 }
 
-function GuestComposer({ onAddGuest }: { onAddGuest: (name: string, englishName: string) => void }) {
+function GuestComposer({ onAddGuest }: { onAddGuest: (name: string, pin: string) => void }) {
   return (
     <form
       className="guest-form"
@@ -139,23 +146,32 @@ function GuestComposer({ onAddGuest }: { onAddGuest: (name: string, englishName:
         const form = event.currentTarget;
         const data = new FormData(form);
         const name = String(data.get("name") ?? "");
-        const englishName = String(data.get("englishName") ?? "");
-        onAddGuest(name, englishName);
+        const pin = String(data.get("pin") ?? "");
+        const pin2 = String(data.get("pin2") ?? "");
+        if (pin !== pin2) {
+          window.alert("PIN and confirmation do not match.");
+          return;
+        }
+        onAddGuest(name, pin);
         form.reset();
       }}
     >
-      <h3>Add temporary card</h3>
-      <p>For auditors not on the roster. Different color · not saved after restart.</p>
+      <h3>Create name card</h3>
+      <p>One-time setup: display name + PIN. Remember your PIN for Task 1–3.</p>
       <label>
-        Display name
+        Display name / nickname
         <input name="name" type="text" required maxLength={40} placeholder="Name" autoComplete="off" />
       </label>
       <label>
-        English name (optional)
-        <input name="englishName" type="text" maxLength={40} placeholder="Optional" autoComplete="off" />
+        PIN (at least 4 characters)
+        <input name="pin" type="password" required minLength={4} maxLength={32} autoComplete="new-password" />
+      </label>
+      <label>
+        Confirm PIN
+        <input name="pin2" type="password" required minLength={4} maxLength={32} autoComplete="new-password" />
       </label>
       <button type="submit" className="ghost-button">
-        Add temporary card
+        Create name card
       </button>
     </form>
   );
@@ -168,6 +184,7 @@ function TrayGroup({
   selectedId,
   matchKind,
   studyPlanMeta,
+  workshopTasks,
   onSelect,
   onEdit,
   onRemoveGuest,
@@ -178,6 +195,7 @@ function TrayGroup({
   selectedId: string | null;
   matchKind: "waiting" | "seated";
   studyPlanMeta: Record<string, StudyPlanMeta>;
+  workshopTasks: Record<string, WorkshopTaskMeta>;
   onSelect: (personId: string) => void;
   onEdit: (personId: string) => void;
   onRemoveGuest?: (personId: string) => void;
@@ -197,6 +215,7 @@ function TrayGroup({
           const selected = selectedId === person.id;
           const isGuest = person.role === "guest";
           const planMeta = studyPlanMeta[person.id];
+          const tasks = workshopTasks[person.id];
           return (
             <div
               key={person.id}
@@ -221,6 +240,7 @@ function TrayGroup({
                   person={person}
                   selected={selected}
                   highlighted={query.trim().length > 0}
+                  workshopTasks={tasks}
                   highlightKind={query.trim() ? matchKind : undefined}
                   studyPlanSubmitted={Boolean(planMeta)}
                   studyPlanMajor={planMeta?.major ?? null}

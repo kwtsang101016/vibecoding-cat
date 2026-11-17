@@ -11,6 +11,11 @@ interface SeatProps {
   highlighted?: boolean;
   studyPlanSubmitted?: boolean;
   studyPlanMajor?: string | null;
+  workshopTasks?: {
+    surveyAt?: string;
+    htmlAt?: string;
+    githubAt?: string;
+  };
   onSelect: () => void;
   onDoubleUnseat: () => void;
 }
@@ -25,6 +30,7 @@ export function Seat({
   highlighted = false,
   studyPlanSubmitted = false,
   studyPlanMajor = null,
+  workshopTasks,
   onSelect,
   onDoubleUnseat,
 }: SeatProps) {
@@ -117,6 +123,7 @@ export function Seat({
           highlightKind="seated"
           studyPlanSubmitted={studyPlanSubmitted}
           studyPlanMajor={studyPlanMajor}
+          workshopTasks={workshopTasks}
         />
       ) : (
         <span className="seat__placeholder">sit here</span>

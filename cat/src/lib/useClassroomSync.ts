@@ -68,7 +68,7 @@ interface ClassroomSync {
   unseat: (personId: string) => void;
   setLayout: (studentRowCount: number, seatsPerRow: number) => void;
   updateProfile: (personId: string, profile: PersonProfile) => void;
-  addGuest: (name: string, englishName?: string) => void;
+  addGuest: (name: string, pin: string) => void;
   removeGuest: (personId: string) => void;
   reset: () => void;
   canControl: (personId: string) => boolean;
@@ -80,6 +80,7 @@ function normalizeClientState(state: ClassroomState): ClassroomState {
     profiles: state.profiles ?? {},
     guests: Array.isArray(state.guests) ? state.guests : [],
     studyPlanMeta: state.studyPlanMeta ?? {},
+    workshopTasks: state.workshopTasks ?? {},
   };
 }
 
@@ -426,8 +427,8 @@ export function useClassroomSync(): ClassroomSync {
       updateProfile: (personId, profile) => {
         socketRef.current?.emit("updateProfile", { personId, profile });
       },
-      addGuest: (name, englishName = "") => {
-        socketRef.current?.emit("addGuest", { name, englishName });
+      addGuest: (name, pin) => {
+        socketRef.current?.emit("addGuest", { name, pin });
       },
       removeGuest: (personId) => {
         socketRef.current?.emit("removeGuest", { personId });

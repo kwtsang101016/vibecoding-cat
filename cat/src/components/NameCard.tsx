@@ -13,6 +13,11 @@ interface NameCardProps {
   /** Student submitted a study plan via the planner. */
   studyPlanSubmitted?: boolean;
   studyPlanMajor?: string | null;
+  workshopTasks?: {
+    surveyAt?: string;
+    htmlAt?: string;
+    githubAt?: string;
+  };
 }
 
 export function NameCard({
@@ -24,6 +29,7 @@ export function NameCard({
   highlightKind = "waiting",
   studyPlanSubmitted = false,
   studyPlanMajor = null,
+  workshopTasks,
 }: NameCardProps) {
   const roleLabel =
     person.role === "aa"
@@ -58,6 +64,13 @@ export function NameCard({
       >
         <h3 className="name-card__name">{person.name}</h3>
         {studyPlanSubmitted ? <span className="name-card__plan-dot" title="Study plan submitted" /> : null}
+        {workshopTasks?.surveyAt || workshopTasks?.htmlAt || workshopTasks?.githubAt ? (
+          <span className="name-card__task-dots" title="Workshop tasks">
+            <i className={workshopTasks?.surveyAt ? "on" : ""}>1</i>
+            <i className={workshopTasks?.htmlAt ? "on" : ""}>2</i>
+            <i className={workshopTasks?.githubAt ? "on" : ""}>3</i>
+          </span>
+        ) : null}
       </article>
     );
   }
@@ -90,6 +103,14 @@ export function NameCard({
         {studyPlanSubmitted ? (
           <p className="name-card__meta name-card__meta--plan">
             Study plan submitted{studyPlanMajor ? ` · ${studyPlanMajor}` : ""}
+          </p>
+        ) : null}
+        {workshopTasks ? (
+          <p className="name-card__meta name-card__meta--tasks">
+            Tasks:
+            {workshopTasks.surveyAt ? " T1✓" : " T1·"}
+            {workshopTasks.htmlAt ? " T2✓" : " T2·"}
+            {workshopTasks.githubAt ? " T3✓" : " T3·"}
           </p>
         ) : null}
       </div>

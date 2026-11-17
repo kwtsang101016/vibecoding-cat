@@ -24,6 +24,7 @@ export const DEFAULT_STATE: ClassroomState = {
   profiles: {},
   guests: [],
   studyPlanMeta: {},
+  workshopTasks: {},
 };
 
 export function cloneState(state: ClassroomState): ClassroomState {
@@ -34,6 +35,7 @@ export function cloneState(state: ClassroomState): ClassroomState {
     profiles: { ...state.profiles },
     guests: state.guests.map((guest) => ({ ...guest })),
     studyPlanMeta: { ...(state.studyPlanMeta ?? {}) },
+    workshopTasks: { ...(state.workshopTasks ?? {}) },
   };
 }
 
@@ -45,28 +47,16 @@ export function guestIdsOf(state: ClassroomState): Set<string> {
   return new Set((state.guests ?? []).map((guest) => guest.id));
 }
 
-/** Drop temporary auditors before writing to Redis. */
+/** Persist seating, workshop cards, and task badges to Redis. */
 export function forDurableStore(state: ClassroomState): ClassroomState {
-  const guestIds = guestIdsOf(state);
-  const placements: Record<string, SeatRef> = {};
-  const profiles: Record<string, PersonProfile> = {};
-  for (const [personId, placement] of Object.entries(state.placements)) {
-    if (!guestIds.has(personId)) {
-      placements[personId] = placement;
-    }
-  }
-  for (const [personId, profile] of Object.entries(state.profiles)) {
-    if (!guestIds.has(personId)) {
-      profiles[personId] = profile;
-    }
-  }
   return {
     studentRowCount: state.studentRowCount,
     seatsPerRow: state.seatsPerRow,
-    placements,
-    profiles,
-    guests: [],
+    placements: { ...state.placements },
+    profiles: { ...state.profiles },
+    guests: (state.guests ?? []).map((guest) => ({ ...guest })),
     studyPlanMeta: { ...(state.studyPlanMeta ?? {}) },
+    workshopTasks: { ...(state.workshopTasks ?? {}) },
   };
 }
 
@@ -97,8 +87,8 @@ export function addGuest(state: ClassroomState, guest: Person): ClassroomState {
   if ((state.guests ?? []).some((entry) => entry.id === guest.id)) {
     throw new Error("That temporary card already exists.");
   }
-  if ((state.guests ?? []).length >= 40) {
-    throw new Error("Too many temporary cards for this session.");
+  if ((state.guests ?? []).length >= 80) {
+    throw new Error("Too many name cards for this workshop (max 80).");
   }
   const next = cloneState(state);
   next.guests = [...next.guests, guest];
@@ -222,6 +212,7 @@ export function resetSeating(state: ClassroomState): ClassroomState {
     profiles: { ...state.profiles },
     guests: state.guests.map((guest) => ({ ...guest })),
     studyPlanMeta: { ...(state.studyPlanMeta ?? {}) },
+    workshopTasks: { ...(state.workshopTasks ?? {}) },
   };
 }
 
@@ -364,6 +355,10 @@ export function normalizeLoadedState(value: ClassroomState): ClassroomState {
     studyPlanMeta:
       value.studyPlanMeta && typeof value.studyPlanMeta === "object"
         ? value.studyPlanMeta
+        : {},
+    workshopTasks:
+      value.workshopTasks && typeof value.workshopTasks === "object"
+        ? value.workshopTasks
         : {},
   };
 }

@@ -82,7 +82,6 @@ export default function App() {
   const [pending, setPending] = useState<PendingAction | null>(null);
   const [authBusy, setAuthBusy] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
-  const [viewPlanBusy, setViewPlanBusy] = useState(false);
   const lastTapRef = useRef<{ id: string; at: number } | null>(null);
 
   const peopleById = useMemo(() => {
@@ -124,40 +123,6 @@ export default function App() {
   const selectedPerson = selectedId ? peopleById[selectedId] : undefined;
   const editingPerson = editingId ? peopleById[editingId] : undefined;
   const studyPlanMeta = sync.state.studyPlanMeta ?? {};
-  const selectedPlanMeta = selectedId ? studyPlanMeta[selectedId] : undefined;
-
-  const handleViewStudyPlan = async () => {
-    if (!selectedId || !selectedPlanMeta) {
-      return;
-    }
-    const pin = loadAuthSession().instructorSecret;
-    if (!pin) {
-      window.alert("Enter the instructor PIN first (Instructor PIN), then try View study plan again.");
-      return;
-    }
-    setViewPlanBusy(true);
-    try {
-      const response = await fetch("/api/study-plans/view-token", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ personId: selectedId, instructorPin: pin }),
-      });
-      const payload = (await response.json()) as {
-        ok?: boolean;
-        message?: string;
-        viewUrl?: string;
-      };
-      if (!response.ok || !payload.ok || !payload.viewUrl) {
-        throw new Error(payload.message || "Could not open the study plan.");
-      }
-      window.open(payload.viewUrl, "_blank", "noopener,noreferrer");
-    } catch (error) {
-      window.alert(error instanceof Error ? error.message : "Could not open the study plan.");
-    } finally {
-      setViewPlanBusy(false);
-    }
-  };
-
   const runAction = (action: PendingAction) => {
     switch (action.type) {
       case "place":
@@ -266,22 +231,146 @@ export default function App() {
     ensureAndRun({ type: "saveAttendance" });
   };
 
-  const handleSaveStudyPlans = () => {
-    const submitted = Object.keys(sync.state.studyPlanMeta ?? {}).length;
-    if (submitted === 0) {
-      window.alert("No study plans have been submitted yet.");
-      return;
-    }
-    if (!loadAuthSession().instructorSecret) {
-      setAuthError(null);
-      window.setTimeout(() => setPending({ type: "saveStudyPlans" }), 0);
-      return;
-    }
-    ensureAndRun({ type: "saveStudyPlans" });
+  const handleAddGuest = (name: string, pin: string) => {
+    sync.addGuest(name, pin);
   };
 
-  const handleAddGuest = (name: string, englishName: string) => {
-    sync.addGuest(name, englishName);
+  const workshopTasks = sync.state.workshopTasks ?? {};
+  const selectedTasks = selectedId ? workshopTasks[selectedId] : undefined;
+
+  const instructorPinOrAsk = (): string | null => {
+    const pin = loadAuthSession().instructorSecret;
+    if (pin) return pin;
+    window.alert("Enter the instructor PIN first (Instructor PIN), then try again.");
+    return null;
+  };
+
+  const handleCheckDuplicates = async () => {
+    const pin = instructorPinOrAsk();
+    if (!pin) return;
+    try {
+      const response = await fetch("/api/workshop/duplicates", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ instructorPin: pin }),
+      });
+      const payload = (await response.json()) as {
+        ok?: boolean;
+        message?: string;
+        duplicates?: Array<{ name: string; count: number }>;
+      };
+      if (!response.ok || !payload.ok) {
+        throw new Error(payload.message || "Could not check duplicates.");
+      }
+      const rows = payload.duplicates ?? [];
+      if (rows.length === 0) {
+        window.alert("No duplicate display names.");
+        return;
+      }
+      window.alert(
+        rows.map((row) => `${row.name} × ${row.count}`).join("\n"),
+      );
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : "Could not check duplicates.");
+    }
+  };
+
+  const handleSurveySummary = async () => {
+    const pin = instructorPinOrAsk();
+    if (!pin) return;
+    try {
+      const response = await fetch("/api/workshop/survey-summary", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ instructorPin: pin }),
+      });
+      const payload = (await response.json()) as {
+        ok?: boolean;
+        message?: string;
+        summary?: {
+          total: number;
+          knowIdeWorkMode: Record<string, number>;
+          aiFrequency: Record<string, number>;
+          aiIdeFrequency: Record<string, number>;
+        };
+      };
+      if (!response.ok || !payload.ok || !payload.summary) {
+        throw new Error(payload.message || "Could not load survey summary.");
+      }
+      const s = payload.summary;
+      const fmt = (obj: Record<string, number>) =>
+        Object.entries(obj)
+          .map(([k, v]) => `  ${k}: ${v}`)
+          .join("\n");
+      window.alert(
+        [
+          `Survey responses: ${s.total}`,
+          "",
+          "Know IDE/Work mode?",
+          fmt(s.knowIdeWorkMode),
+          "",
+          "How often use AI?",
+          fmt(s.aiFrequency),
+          "",
+          "How often use AI IDE/Work mode?",
+          fmt(s.aiIdeFrequency),
+        ].join("\n"),
+      );
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : "Could not load survey summary.");
+    }
+  };
+
+  const handleViewHtml = async () => {
+    if (!selectedId) return;
+    const pin = instructorPinOrAsk();
+    if (!pin) return;
+    try {
+      const response = await fetch("/api/workshop/html/view", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ instructorPin: pin, personId: selectedId }),
+      });
+      const payload = (await response.json()) as {
+        ok?: boolean;
+        message?: string;
+        html?: string;
+        name?: string;
+      };
+      if (!response.ok || !payload.ok || !payload.html) {
+        throw new Error(payload.message || "No HTML for that card.");
+      }
+      const blob = new Blob([payload.html], { type: "text/html;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      window.open(url, "_blank", "noopener,noreferrer");
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : "Could not open HTML.");
+    }
+  };
+
+  const handleRenameCard = async () => {
+    if (!selectedId || !selectedPerson || selectedPerson.role !== "guest") return;
+    const pin = instructorPinOrAsk();
+    if (!pin) return;
+    const newName = window.prompt("New display name:", selectedPerson.name);
+    if (!newName || !newName.trim()) return;
+    try {
+      const response = await fetch("/api/workshop/rename", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          instructorPin: pin,
+          personId: selectedId,
+          newName: newName.trim(),
+        }),
+      });
+      const payload = (await response.json()) as { ok?: boolean; message?: string };
+      if (!response.ok || !payload.ok) {
+        throw new Error(payload.message || "Rename failed.");
+      }
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : "Rename failed.");
+    }
   };
 
   const handleRemoveGuest = (personId: string) => {
@@ -326,17 +415,22 @@ export default function App() {
             {roster.course} · {roster.section}
           </p>
           <div className="title-row">
-            <h1>Class Attending Table</h1>
-            <a className="title-link" href="https://kwtsang101016.github.io/dda1000/">
-              Course homepage
-            </a>
+            <h1>Vibe Coding CAT</h1>
             <a
               className="title-link"
-              href="https://kwtsang101016.github.io/"
+              href="https://kwtsang101016.github.io/activities/vibecoding2026/"
               target="_blank"
               rel="noreferrer"
             >
-              About the instructor
+              Workshop slides
+            </a>
+            <a
+              className="title-link"
+              href="https://kwtsang101016.github.io/activities/vibecoding2026/survey-pre/"
+              target="_blank"
+              rel="noreferrer"
+            >
+              Pre-survey
             </a>
           </div>
           <p className="subtitle">
@@ -456,29 +550,30 @@ export default function App() {
           <p>
             Selected: <strong>{selectedPerson.name}</strong> — tap an empty seat to sit
             {seatedIds.has(selectedPerson.id) ? ", or another empty seat to move" : ""}.
-            You will be asked for your student ID.
+            {selectedTasks
+              ? ` Tasks: ${selectedTasks.surveyAt ? "T1✓" : "T1·"} ${selectedTasks.htmlAt ? "T2✓" : "T2·"} ${selectedTasks.githubAt ? "T3✓" : "T3·"}`
+              : ""}
+            {selectedTasks?.githubUrl ? ` · ${selectedTasks.githubUrl}` : ""}
           </p>
           <div className="selection-bar__actions">
-            <button
-              type="button"
-              className="ghost-button"
-              onClick={() => ensureAndRun({ type: "edit", personId: selectedPerson.id })}
-            >
-              Edit card
-            </button>
-            {selectedPlanMeta ? (
-              <button
-                type="button"
+            {selectedTasks?.htmlAt && sync.isInstructor ? (
+              <button type="button" className="ghost-button" onClick={() => void handleViewHtml()}>
+                View HTML (T2)
+              </button>
+            ) : null}
+            {selectedTasks?.githubUrl ? (
+              <a
                 className="ghost-button"
-                disabled={!sync.isInstructor || viewPlanBusy}
-                title={
-                  sync.isInstructor
-                    ? `Submitted ${new Date(selectedPlanMeta.submittedAt).toLocaleString()}${selectedPlanMeta.major ? ` · ${selectedPlanMeta.major}` : ""}`
-                    : "Instructor only — enter PIN first"
-                }
-                onClick={() => void handleViewStudyPlan()}
+                href={selectedTasks.githubUrl}
+                target="_blank"
+                rel="noreferrer"
               >
-                {viewPlanBusy ? "Opening…" : "View study plan"}
+                Open GitHub (T3)
+              </a>
+            ) : null}
+            {selectedPerson.role === "guest" && sync.isInstructor ? (
+              <button type="button" className="ghost-button" onClick={() => void handleRenameCard()}>
+                Rename card
               </button>
             ) : null}
             {seatedIds.has(selectedPerson.id) ? (
@@ -497,8 +592,7 @@ export default function App() {
         </div>
       ) : sync.status === "live" ? (
         <p className="howto">
-          Tap a name card, then a seat. Student ID is required to sit, move, stand up, or edit —
-          IDs are not shown on the page. Press and hold a seat for details. Double-tap to stand up.
+          Create a name card (name + PIN), then tap the card and a seat. Task marks: T1 survey · T2 HTML · T3 GitHub.
         </p>
       ) : null}
 
@@ -543,9 +637,13 @@ export default function App() {
         <button type="button" className="ghost-button" onClick={handleSaveAttendance}>
           Save attendance
         </button>
-        <button type="button" className="ghost-button" onClick={handleSaveStudyPlans}>
-          Save study plans ({Object.keys(studyPlanMeta).length})
+        <button type="button" className="ghost-button" onClick={() => void handleCheckDuplicates()}>
+          Check duplicate names
         </button>
+        <button type="button" className="ghost-button" onClick={() => void handleSurveySummary()}>
+          Survey summary
+        </button>
+        <WorkshopSubmitPanel />
       </section>
 
       <div className="workspace">
@@ -569,6 +667,7 @@ export default function App() {
                   highlighted={Boolean(occupant && query.trim() && matchesQuery(occupant, query))}
                   studyPlanSubmitted={Boolean(occupantId && studyPlanMeta[occupantId])}
                   studyPlanMajor={occupantId ? studyPlanMeta[occupantId]?.major ?? null : null}
+                  workshopTasks={occupantId ? workshopTasks[occupantId] : undefined}
                   onSelect={() => handleSeatTap(target, occupantId)}
                   onDoubleUnseat={() => {
                     if (!occupantId) {
@@ -604,6 +703,7 @@ export default function App() {
                     highlighted={Boolean(occupant && query.trim() && matchesQuery(occupant, query))}
                     studyPlanSubmitted={Boolean(occupantId && studyPlanMeta[occupantId])}
                     studyPlanMajor={occupantId ? studyPlanMeta[occupantId]?.major ?? null : null}
+                    workshopTasks={occupantId ? workshopTasks[occupantId] : undefined}
                     onSelect={() => handleSeatTap(target, occupantId)}
                     onDoubleUnseat={() => {
                       if (!occupantId) {
@@ -627,6 +727,7 @@ export default function App() {
           query={query}
           selectedId={selectedId}
           studyPlanMeta={studyPlanMeta}
+          workshopTasks={workshopTasks}
           onQueryChange={setQuery}
           onSelect={selectPerson}
           onEdit={(personId) => ensureAndRun({ type: "edit", personId })}
@@ -689,6 +790,107 @@ export default function App() {
         />
       ) : null}
     </div>
+  );
+}
+
+function WorkshopSubmitPanel() {
+  const [name, setName] = useState("");
+  const [pin, setPin] = useState("");
+  const [githubUrl, setGithubUrl] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+
+  const submitHtml = async (file: File | null) => {
+    if (!file) return;
+    setBusy(true);
+    setMessage(null);
+    try {
+      const html = await file.text();
+      const response = await fetch("/api/workshop/html", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, pin, html }),
+      });
+      const payload = (await response.json()) as { ok?: boolean; message?: string };
+      if (!response.ok || !payload.ok) {
+        throw new Error(payload.message || "HTML submit failed.");
+      }
+      setMessage("Task 2 (HTML) submitted.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "HTML submit failed.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const submitGithub = async () => {
+    setBusy(true);
+    setMessage(null);
+    try {
+      const response = await fetch("/api/workshop/github", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, pin, url: githubUrl }),
+      });
+      const payload = (await response.json()) as { ok?: boolean; message?: string };
+      if (!response.ok || !payload.ok) {
+        throw new Error(payload.message || "GitHub submit failed.");
+      }
+      setMessage("Task 3 (GitHub link) submitted.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "GitHub submit failed.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <form
+      className="guest-form"
+      style={{ minWidth: 240 }}
+      onSubmit={(event) => {
+        event.preventDefault();
+        void submitGithub();
+      }}
+    >
+      <h3>Submit Task 2 / 3</h3>
+      <p>Use the same name + PIN as your CAT card.</p>
+      <label>
+        Name
+        <input value={name} onChange={(e) => setName(e.target.value)} required maxLength={40} />
+      </label>
+      <label>
+        PIN
+        <input
+          type="password"
+          value={pin}
+          onChange={(e) => setPin(e.target.value)}
+          required
+          minLength={4}
+        />
+      </label>
+      <label>
+        Task 2 · HTML file
+        <input
+          type="file"
+          accept=".html,text/html"
+          disabled={busy}
+          onChange={(e) => void submitHtml(e.target.files?.[0] ?? null)}
+        />
+      </label>
+      <label>
+        Task 3 · GitHub / Pages URL
+        <input
+          value={githubUrl}
+          onChange={(e) => setGithubUrl(e.target.value)}
+          placeholder="https://….github.io/…"
+        />
+      </label>
+      <button type="submit" className="ghost-button" disabled={busy}>
+        Submit GitHub link
+      </button>
+      {message ? <p className="howto">{message}</p> : null}
+    </form>
   );
 }
 

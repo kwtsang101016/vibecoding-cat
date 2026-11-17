@@ -20,6 +20,19 @@ import {
   studyPlanMetaMap,
 } from "./studyPlans.ts";
 import {
+  duplicateNames,
+  getHtml,
+  listParticipants,
+  loadWorkshopStore,
+  registerParticipant,
+  renameParticipant,
+  saveGithub,
+  saveHtml,
+  saveSurvey,
+  surveySummary,
+  workshopTaskMetaMap,
+} from "./workshopStore.ts";
+import {
   DEFAULT_STATE,
   addGuest,
   createGuestPerson,
@@ -163,10 +176,27 @@ async function main(): Promise<void> {
   personIds = new Set(roster.people.map((person) => person.id));
   state = await loadState();
   await loadStudyPlans(studyPlansPath);
-  // Keep badge meta in classroom state in sync with durable plan store.
+  await loadWorkshopStore();
+  // Restore durable workshop cards into the live guest tray.
+  const workshopPeople: Person[] = listParticipants().map((p) => ({
+    id: p.id,
+    name: p.name,
+    englishName: "",
+    role: "guest" as const,
+    college: "",
+    plan: "Workshop",
+  }));
+  const workshopById = new Map(workshopPeople.map((p) => [p.id, p]));
+  const mergedGuests = [
+    ...workshopPeople,
+    ...(state.guests ?? []).filter((g) => !workshopById.has(g.id)),
+  ];
+  // Keep badge meta in classroom state in sync with durable plan / workshop stores.
   state = {
     ...state,
+    guests: mergedGuests,
     studyPlanMeta: studyPlanMetaMap(),
+    workshopTasks: workshopTaskMetaMap(),
   };
 
   if (STUDENT_ID_SALT) {
@@ -207,10 +237,23 @@ async function main(): Promise<void> {
   const app = express();
   app.disable("x-powered-by");
   app.use(cors({ origin: true }));
-  app.use(express.json({ limit: "250kb" }));
+  app.use(express.json({ limit: "2mb" }));
 
   /** Filled after Socket.IO is created — HTTP submit needs to refresh live badges. */
   let notifyClients: () => void = () => {};
+
+  function refreshWorkshopBadges(): void {
+    state = {
+      ...state,
+      workshopTasks: workshopTaskMetaMap(),
+    };
+  }
+
+  function requireInstructorPin(value: unknown): void {
+    if (typeof value !== "string" || value !== INSTRUCTOR_PIN) {
+      throw new Error("Instructor PIN required.");
+    }
+  }
 
   app.get("/health", (_req, res) => {
     res.json({
@@ -219,7 +262,181 @@ async function main(): Promise<void> {
       section: roster.section,
       durableStore: durableStoreEnabled(),
       studyPlans: Object.keys(state.studyPlanMeta ?? {}).length,
+      workshopCards: listParticipants().length,
+      workshopSurveys: Object.keys(workshopTaskMetaMap()).filter((id) => workshopTaskMetaMap()[id].surveyAt)
+        .length,
     });
+  });
+
+  /** Create a durable workshop name card (name + PIN). */
+  app.post("/api/workshop/register", async (req, res) => {
+    try {
+      const { name, pin } = req.body as { name?: unknown; pin?: unknown };
+      if (typeof name !== "string" || typeof pin !== "string") {
+        throw new Error("Enter a display name and PIN.");
+      }
+      const participant = await registerParticipant(name, pin);
+      const guest = createGuestPerson(participant.name, "");
+      // Keep the stable id from the workshop store.
+      const person: Person = {
+        ...guest,
+        id: participant.id,
+        plan: "Workshop",
+      };
+      if (!findGuest(person.id)) {
+        state = addGuest(state, person);
+      }
+      refreshWorkshopBadges();
+      await persistState(state, true);
+      notifyClients();
+      res.json({ ok: true, personId: participant.id, name: participant.name });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not create the name card.";
+      res.status(400).json({ ok: false, message });
+    }
+  });
+
+  app.post("/api/workshop/survey", async (req, res) => {
+    try {
+      const { name, pin, answers } = req.body as {
+        name?: unknown;
+        pin?: unknown;
+        answers?: unknown;
+      };
+      if (typeof name !== "string" || typeof pin !== "string") {
+        throw new Error("Enter the name and PIN for your CAT card.");
+      }
+      const record = await saveSurvey(name, pin, answers);
+      refreshWorkshopBadges();
+      await persistState(state, true);
+      notifyClients();
+      res.json({ ok: true, personId: record.personId, submittedAt: record.submittedAt });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not submit the survey.";
+      res.status(400).json({ ok: false, message });
+    }
+  });
+
+  app.post("/api/workshop/html", async (req, res) => {
+    try {
+      const { name, pin, html } = req.body as {
+        name?: unknown;
+        pin?: unknown;
+        html?: unknown;
+      };
+      if (typeof name !== "string" || typeof pin !== "string") {
+        throw new Error("Enter the name and PIN for your CAT card.");
+      }
+      if (typeof html !== "string") {
+        throw new Error("Upload an HTML file.");
+      }
+      const record = await saveHtml(name, pin, html);
+      refreshWorkshopBadges();
+      await persistState(state, true);
+      notifyClients();
+      res.json({
+        ok: true,
+        personId: record.personId,
+        submittedAt: record.submittedAt,
+        byteLength: record.byteLength,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not submit the HTML file.";
+      res.status(400).json({ ok: false, message });
+    }
+  });
+
+  app.post("/api/workshop/github", async (req, res) => {
+    try {
+      const { name, pin, url } = req.body as {
+        name?: unknown;
+        pin?: unknown;
+        url?: unknown;
+      };
+      if (typeof name !== "string" || typeof pin !== "string" || typeof url !== "string") {
+        throw new Error("Enter name, PIN, and GitHub URL.");
+      }
+      const record = await saveGithub(name, pin, url);
+      refreshWorkshopBadges();
+      await persistState(state, true);
+      notifyClients();
+      res.json({ ok: true, personId: record.personId, submittedAt: record.submittedAt, url: record.url });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not submit the GitHub link.";
+      res.status(400).json({ ok: false, message });
+    }
+  });
+
+  app.post("/api/workshop/duplicates", (req, res) => {
+    try {
+      const { instructorPin } = req.body as { instructorPin?: unknown };
+      requireInstructorPin(instructorPin);
+      res.json({ ok: true, duplicates: duplicateNames() });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not check duplicates.";
+      res.status(400).json({ ok: false, message });
+    }
+  });
+
+  app.post("/api/workshop/survey-summary", (req, res) => {
+    try {
+      const { instructorPin } = req.body as { instructorPin?: unknown };
+      requireInstructorPin(instructorPin);
+      res.json({ ok: true, summary: surveySummary() });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not load survey summary.";
+      res.status(400).json({ ok: false, message });
+    }
+  });
+
+  app.post("/api/workshop/html/view", (req, res) => {
+    try {
+      const { instructorPin, personId } = req.body as {
+        instructorPin?: unknown;
+        personId?: unknown;
+      };
+      requireInstructorPin(instructorPin);
+      if (typeof personId !== "string") throw new Error("Missing personId.");
+      const record = getHtml(personId);
+      if (!record) throw new Error("No HTML submitted for that card yet.");
+      res.json({
+        ok: true,
+        personId: record.personId,
+        name: record.name,
+        submittedAt: record.submittedAt,
+        html: record.html,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not open that HTML file.";
+      res.status(400).json({ ok: false, message });
+    }
+  });
+
+  app.post("/api/workshop/rename", async (req, res) => {
+    try {
+      const { instructorPin, personId, newName } = req.body as {
+        instructorPin?: unknown;
+        personId?: unknown;
+        newName?: unknown;
+      };
+      requireInstructorPin(instructorPin);
+      if (typeof personId !== "string" || typeof newName !== "string") {
+        throw new Error("personId and newName are required.");
+      }
+      const updated = await renameParticipant(personId, newName);
+      state = {
+        ...state,
+        guests: (state.guests ?? []).map((g) =>
+          g.id === personId ? { ...g, name: updated.name } : g,
+        ),
+      };
+      await persistState(state, true);
+      notifyClients();
+      res.json({ ok: true, personId: updated.id, name: updated.name });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not rename that card.";
+      res.status(400).json({ ok: false, message });
+    }
   });
 
   /** Public roster cards for the study-planner “Submit to CAT” picker. */
@@ -826,21 +1043,21 @@ async function main(): Promise<void> {
       try {
         requireOpenSession(socket);
         if (typeof payload !== "object" || payload === null) {
-          throw new Error("Invalid temporary card payload.");
+          throw new Error("Invalid name card payload.");
         }
-        const { name, englishName } = payload as { name?: unknown; englishName?: unknown };
-        if (typeof name !== "string") {
-          throw new Error("Enter a display name for the temporary card.");
+        const { name, pin } = payload as { name?: unknown; pin?: unknown };
+        if (typeof name !== "string" || typeof pin !== "string") {
+          throw new Error("Enter a display name and a PIN (at least 4 characters).");
         }
-        const guest = createGuestPerson(
-          name,
-          typeof englishName === "string" ? englishName : "",
-        );
-        state = addGuest(state, guest);
-        await persistState(state, false);
+        const participant = await registerParticipant(name, pin);
+        const guest = createGuestPerson(participant.name, "");
+        const person: Person = { ...guest, id: participant.id, plan: "Workshop" };
+        state = addGuest(state, person);
+        refreshWorkshopBadges();
+        await persistState(state, true);
         emitState();
       } catch (error) {
-        const message = error instanceof Error ? error.message : "Could not add a temporary card.";
+        const message = error instanceof Error ? error.message : "Could not create the name card.";
         socket.emit("error-message", message);
       }
     });
