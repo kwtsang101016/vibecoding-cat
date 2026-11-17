@@ -630,8 +630,8 @@ export default function App() {
           <div className="blackboard">Front · 讲台</div>
 
           <ClassroomRow
-            label="AA & PAs"
-            hint="Academic advisor and peer advisors"
+            label="Speaker"
+            hint="Workshop speaker"
             seats={Array.from({ length: seatCount }, (_, seat) => {
               const target: SeatRef = { zone: "advisor", row: 0, seat };
               const occupantId = occupantAt(sync.state, "advisor", 0, seat);

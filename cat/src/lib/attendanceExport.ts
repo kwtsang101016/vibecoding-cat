@@ -19,7 +19,7 @@ export interface AttendanceRow {
 
 function rowLabelFor(placement: SeatRef): string {
   if (placement.zone === "advisor") {
-    return "AA & PAs";
+    return "Speaker";
   }
   return `Row ${placement.row + 1}`;
 }

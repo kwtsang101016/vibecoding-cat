@@ -69,7 +69,7 @@ export function NameCardTray({
         </p>
       ) : null}
       <TrayGroup
-        title="Academic advisor"
+        title="Speaker"
         people={advisors}
         query={query}
         selectedId={selectedId}
