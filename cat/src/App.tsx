@@ -15,6 +15,10 @@ import { downloadStudyPlans } from "./lib/studyPlanExport.ts";
 import { mergePerson, type DisplayPerson } from "./lib/people.ts";
 import { useClassroomSync } from "./lib/useClassroomSync.ts";
 import {
+  loadWorkshopCredentials,
+  saveWorkshopCredentials,
+} from "./lib/workshopCredentials.ts";
+import {
   MAX_SEATS_PER_ROW,
   MAX_STUDENT_ROWS,
   MIN_SEATS_PER_ROW,
@@ -436,6 +440,38 @@ export default function App() {
               href="https://kwtsang101016.github.io/activities/vibecoding2026/survey-pre/"
               target="_blank"
               rel="noreferrer"
+              onClick={(event) => {
+                const creds = loadWorkshopCredentials();
+                if (!creds) {
+                  return;
+                }
+                event.preventDefault();
+                const surveyUrl =
+                  "https://kwtsang101016.github.io/activities/vibecoding2026/survey-pre/";
+                const popup = window.open(surveyUrl, "_blank");
+                if (!popup) {
+                  window.location.assign(surveyUrl);
+                  return;
+                }
+                const payload = {
+                  type: "vibecoding-cat-creds",
+                  name: creds.name,
+                  pin: creds.pin,
+                };
+                const origin = "https://kwtsang101016.github.io";
+                let attempts = 0;
+                const timer = window.setInterval(() => {
+                  attempts += 1;
+                  try {
+                    popup.postMessage(payload, origin);
+                  } catch {
+                    // popup may still be loading
+                  }
+                  if (attempts >= 12 || popup.closed) {
+                    window.clearInterval(timer);
+                  }
+                }, 400);
+              }}
             >
               Pre-survey
             </a>
@@ -773,17 +809,24 @@ export default function App() {
 }
 
 function WorkshopSubmitPanel() {
-  const [name, setName] = useState("");
-  const [pin, setPin] = useState("");
+  const saved = loadWorkshopCredentials();
+  const [name, setName] = useState(saved?.name ?? "");
+  const [pin, setPin] = useState(saved?.pin ?? "");
   const [githubUrl, setGithubUrl] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const remembered = Boolean(saved?.name && saved?.pin);
+
+  const rememberCurrent = () => {
+    saveWorkshopCredentials(name, pin);
+  };
 
   const submitHtml = async (file: File | null) => {
     if (!file) return;
     setBusy(true);
     setMessage(null);
     try {
+      rememberCurrent();
       const html = await file.text();
       const response = await fetch("/api/workshop/html", {
         method: "POST",
@@ -806,6 +849,7 @@ function WorkshopSubmitPanel() {
     setBusy(true);
     setMessage(null);
     try {
+      rememberCurrent();
       const response = await fetch("/api/workshop/github", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -833,7 +877,11 @@ function WorkshopSubmitPanel() {
     >
       <div className="workshop-submit__head">
         <h3>Submit Task 2 / 3</h3>
-        <p>Same name + PIN as your CAT card.</p>
+        <p>
+          {remembered
+            ? "Name + PIN loaded from this browser (saved when you created your card)."
+            : "Same name + PIN as your CAT card — saved on this PC after first use."}
+        </p>
       </div>
       <label>
         Name
@@ -847,6 +895,7 @@ function WorkshopSubmitPanel() {
           onChange={(e) => setPin(e.target.value)}
           required
           minLength={4}
+          autoComplete="current-password"
         />
       </label>
       <label>

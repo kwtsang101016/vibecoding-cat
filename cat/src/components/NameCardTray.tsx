@@ -1,5 +1,6 @@
 import type { StudyPlanMeta, WorkshopTaskMeta } from "../../shared/types.ts";
 import type { DisplayPerson } from "../lib/people.ts";
+import { saveWorkshopCredentials } from "../lib/workshopCredentials.ts";
 import { NameCard } from "./NameCard.tsx";
 
 interface NameCardTrayProps {
@@ -153,11 +154,15 @@ function GuestComposer({ onAddGuest }: { onAddGuest: (name: string, pin: string)
           return;
         }
         onAddGuest(name, pin);
+        saveWorkshopCredentials(name, pin);
         form.reset();
       }}
     >
       <h3>Create name card</h3>
-      <p>One-time setup: display name + PIN. Remember your PIN for Task 1–3.</p>
+      <p>
+        One-time setup: display name + PIN. This browser saves them on this PC and fills Task 1–3
+        for you.
+      </p>
       <label>
         Display name / nickname
         <input name="name" type="text" required maxLength={40} placeholder="Name" autoComplete="off" />
