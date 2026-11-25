@@ -32,6 +32,7 @@ import {
   saveSurvey,
   surveySummary,
   workshopTaskMetaMap,
+  exportWorkshopWork,
 } from "./workshopStore.ts";
 import {
   DEFAULT_STATE,
@@ -386,6 +387,18 @@ async function main(): Promise<void> {
       res.json({ ok: true, summary: surveySummary() });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Could not load survey summary.";
+      res.status(400).json({ ok: false, message });
+    }
+  });
+
+  /** Full student work for the instructor (no PIN hashes). */
+  app.post("/api/workshop/export", (req, res) => {
+    try {
+      const { instructorPin } = req.body as { instructorPin?: unknown };
+      requireInstructorPin(instructorPin);
+      res.json({ ok: true, ...exportWorkshopWork() });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not export workshop work.";
       res.status(400).json({ ok: false, message });
     }
   });

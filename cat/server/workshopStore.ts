@@ -258,6 +258,25 @@ export function getGithub(personId: string): WorkshopGithubRecord | undefined {
   return githubLinks[personId];
 }
 
+/** Instructor download. PIN hashes are omitted. */
+export function exportWorkshopWork(): {
+  exportedAt: string;
+  participants: Array<Omit<WorkshopParticipant, "pinHash">>;
+  surveys: WorkshopSurveyRecord[];
+  htmlFiles: WorkshopHtmlRecord[];
+  githubLinks: WorkshopGithubRecord[];
+} {
+  return {
+    exportedAt: new Date().toISOString(),
+    participants: Object.values(participants)
+      .map(({ pinHash: _pinHash, ...rest }) => rest)
+      .sort((a, b) => a.name.localeCompare(b.name, "zh")),
+    surveys: Object.values(surveys).sort((a, b) => a.name.localeCompare(b.name, "zh")),
+    htmlFiles: Object.values(htmlFiles).sort((a, b) => a.name.localeCompare(b.name, "zh")),
+    githubLinks: Object.values(githubLinks).sort((a, b) => a.name.localeCompare(b.name, "zh")),
+  };
+}
+
 export function duplicateNames(): Array<{ name: string; count: number; ids: string[] }> {
   const buckets = new Map<string, WorkshopParticipant[]>();
   for (const p of Object.values(participants)) {
